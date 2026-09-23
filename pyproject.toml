@@ -1,0 +1,72 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "lsdetect"
+description = "Line segment detector (LSD) in pure Rust, with Python bindings"
+authors = [{ name = "Patrick Zwerschke" }]
+requires-python = ">=3.11"
+license = "MIT OR Apache-2.0"
+dynamic = ["version"]
+dependencies = ["numpy"]
+
+[tool.ruff]
+line-length = 79
+target-version = "py311"
+src = ["tests"]
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+unfixable = []
+
+select = [
+  "E",   # pycodestyle
+  "F",   # pyflakes
+  "A",   # flake8-builtins
+  "B",   # flake8-bugbear
+  "S",   # flake8-bandit
+  "C4",  # flake8-comprehensions
+  "Q",   # flake8-quotes
+  "RET", # flake8-return
+  "SIM", # flake8-simplify
+  "PTH", # flake8-use-pathlib
+  "UP",  # pyupgrade
+  "D",   # pydocstyle
+  "I",   # isort
+  "N",   # pep8-naming
+  "W",   # warning
+  "PL",  # Pylint
+  "T",   # flake8-debugger + flake8-print
+  "ARG", # flake8-unused-arguments
+  "DTZ", # flake8-datetimez
+  "G",   # flake8-logging-format
+  "ICN", # flake8-import-conventions
+  "ISC", # implicit string concatenation
+  "LOG", # flake8-logging
+  "PIE", # flake8-pie
+  "RSE", # flake8-raise
+  "TID", # flake8-tidy-imports
+  "FURB",# refurb
+  "NPY", # numpy rules
+  "PGH", # pygrep-hooks
+  "FLY", # flynt
+  "PERF",# Perflint
+  "RUF", # Ruff-specific rules
+]
+
+ignore = [
+  "ISC001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004", "S", "ARG", "ANN", "E402", "E501", "F401", "PLC0415"]
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[project.urls]
+Repository = "https://github.com/p5k369/lsdetect"
