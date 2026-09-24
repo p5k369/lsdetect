@@ -89,6 +89,9 @@ struct Rect {
 /// Find the validated line segments of a grayscale image.
 pub fn detect(image: &[f64], width: usize, height: usize, scale: f64) -> Vec<Segment> {
     assert_eq!(image.len(), width * height);
+    if width < 3 || height < 3 {
+        return Vec::new();
+    }
     let owned;
     let (img, w, h) = if scale < 1.0 {
         owned = downscale(image, width, height, scale);
@@ -758,6 +761,14 @@ mod tests {
         assert!(best.angle().abs() > 88.0, "angle {}", best.angle());
         assert!(best.length() > 60.0, "length {}", best.length());
         assert!(best.x1 > 45.0 && best.x1 < 75.0, "x {}", best.x1);
+    }
+
+    #[test]
+    fn tiny_image_is_empty() {
+        for n in 1..3 {
+            let img = vec![128.0; n * n];
+            assert!(detect(&img, n, n, SCALE).is_empty(), "{n}x{n}");
+        }
     }
 
     #[test]
