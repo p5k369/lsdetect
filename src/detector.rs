@@ -27,13 +27,19 @@ const NORM_BINS: usize = 1024;
 /// One detected line segment, in input-image coordinates.
 #[derive(Clone, Copy, Debug)]
 pub struct Segment {
+    /// First endpoint x, in input-image pixels.
     pub x1: f64,
+    /// First endpoint y, in input-image pixels.
     pub y1: f64,
+    /// Second endpoint x, in input-image pixels.
     pub x2: f64,
+    /// Second endpoint y, in input-image pixels.
     pub y2: f64,
+    /// Segment width in pixels.
     pub width: f64,
     /// The angle tolerance the detection used, as a fraction of pi.
     pub precision: f64,
+    /// Natural log of the number of false alarms.
     pub log_nfa: f64,
 }
 

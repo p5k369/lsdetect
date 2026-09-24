@@ -13,7 +13,7 @@ import lsdetect
 segments = lsdetect.detect(gray)
 
 for s in segments:
-    print(s.x1, s.y1, s.x2, s.y2, s.width, s.angle, s.length)
+    print(s.x1, s.y1, s.x2, s.y2, s.width, s.precision, s.angle, s.length)
 ```
 
 Build with [maturin](https://www.maturin.rs): `maturin develop
@@ -21,8 +21,14 @@ Build with [maturin](https://www.maturin.rs): `maturin develop
 
 ## Rust
 
+Not on crates.io yet, so add it as a git dependency:
+
+```toml
+lsdetect = { git = "https://github.com/p5k369/lsdetect" }
+```
+
 ```rust
-let segments = lsdetect::detect(&gray, width, height, 0.8);
+let segments = lsdetect::detect(&gray, width, height, lsdetect::SCALE);
 ```
 
 ## License
