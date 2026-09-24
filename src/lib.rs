@@ -1,9 +1,11 @@
 //! Python bindings for the lsdetect line segment detector.
 
-use numpy::PyReadonlyArray2;
+use numpy::ndarray::Array3;
+use numpy::{IntoPyArray, PyArray3, PyReadonlyArray2, PyReadonlyArray3};
 use pyo3::prelude::*;
 
 mod detector;
+mod warp;
 
 /// One detected line segment, in input-image coordinates.
 #[pyclass(frozen, module = "lsdetect")]
@@ -18,6 +20,8 @@ struct Segment {
     y2: f64,
     #[pyo3(get)]
     width: f64,
+    #[pyo3(get)]
+    precision: f64,
     #[pyo3(get)]
     log_nfa: f64,
 }
@@ -52,6 +56,7 @@ impl Segment {
             x2: self.x2,
             y2: self.y2,
             width: self.width,
+            precision: self.precision,
             log_nfa: self.log_nfa,
         }
     }
@@ -74,14 +79,36 @@ fn detect(py: Python<'_>, gray: PyReadonlyArray2<'_, f64>, scale: f64) -> Vec<Se
             x2: s.x2,
             y2: s.y2,
             width: s.width,
+            precision: s.precision,
             log_nfa: s.log_nfa,
         })
         .collect()
+}
+
+/// Perspective-warp an RGB image through an inverse homography.
+#[pyfunction]
+fn warp_rgb<'py>(
+    py: Python<'py>,
+    src: PyReadonlyArray3<'py, u8>,
+    inverse: [f64; 9],
+    scale: f64,
+    off_x: f64,
+    off_y: f64,
+) -> Bound<'py, PyArray3<u8>> {
+    let view = src.as_array();
+    let height = view.shape()[0];
+    let width = view.shape()[1];
+    let data: Vec<u8> = view.iter().copied().collect();
+    let out =
+        py.detach(move || warp::warp_rgb(&data, width, height, &inverse, scale, off_x, off_y));
+    let array = Array3::from_shape_vec((height, width, 3), out).unwrap();
+    array.into_pyarray(py)
 }
 
 #[pymodule]
 fn lsdetect(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Segment>()?;
     m.add_function(wrap_pyfunction!(detect, m)?)?;
+    m.add_function(wrap_pyfunction!(warp_rgb, m)?)?;
     Ok(())
 }

@@ -32,6 +32,8 @@ pub struct Segment {
     pub x2: f64,
     pub y2: f64,
     pub width: f64,
+    /// The angle tolerance the detection used, as a fraction of pi.
+    pub precision: f64,
     pub log_nfa: f64,
 }
 
@@ -139,6 +141,7 @@ pub fn detect(image: &[f64], width: usize, height: usize, scale: f64) -> Vec<Seg
             x2: (rect.x2 + 0.5) * back,
             y2: (rect.y2 + 0.5) * back,
             width: rect.width * back,
+            precision: rect.p,
             log_nfa,
         });
     }
