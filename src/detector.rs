@@ -213,14 +213,20 @@ fn downscale(image: &[f64], width: usize, height: usize, scale: f64) -> (Vec<f64
         });
     let new_w = ((width as f64 * scale).floor() as usize).max(2);
     let new_h = ((height as f64 * scale).floor() as usize).max(2);
+    let cols: Vec<usize> = (0..new_w)
+        .map(|x| ((x as f64 / scale) as usize).min(width - 1))
+        .collect();
     let mut small = vec![0.0; new_w * new_h];
-    for y in 0..new_h {
-        let sy = ((y as f64 / scale) as usize).min(height - 1);
-        for x in 0..new_w {
-            let sx = ((x as f64 / scale) as usize).min(width - 1);
-            small[y * new_w + x] = blurred[sy * width + sx];
-        }
-    }
+    small
+        .par_chunks_mut(new_w)
+        .enumerate()
+        .for_each(|(y, out)| {
+            let sy = ((y as f64 / scale) as usize).min(height - 1);
+            let src = &blurred[sy * width..(sy + 1) * width];
+            for (slot, &sx) in out.iter_mut().zip(&cols) {
+                *slot = src[sx];
+            }
+        });
     (small, new_w, new_h)
 }
 
@@ -563,11 +569,12 @@ fn rect_counts(rect: &Rect, field: &[Px], rho: f32, width: usize, height: usize)
     let cy = (rect.y1 + rect.y2) / 2.0;
     let half_l = (rect.x2 - rect.x1).hypot(rect.y2 - rect.y1) / 2.0;
     let half_w = rect.width / 2.0;
-    let reach = half_l.hypot(half_w);
-    let x_lo = ((cx - reach).floor().max(0.0)) as usize;
-    let y_lo = ((cy - reach).floor().max(0.0)) as usize;
-    let x_hi = ((cx + reach).ceil() as usize).min(width - 1);
-    let y_hi = ((cy + reach).ceil() as usize).min(height - 1);
+    let reach_x = half_l * rect.dx.abs() + half_w * rect.dy.abs();
+    let reach_y = half_l * rect.dy.abs() + half_w * rect.dx.abs();
+    let x_lo = ((cx - reach_x).floor().max(0.0)) as usize;
+    let y_lo = ((cy - reach_y).floor().max(0.0)) as usize;
+    let x_hi = ((cx + reach_x).ceil() as usize).min(width - 1);
+    let y_hi = ((cy + reach_y).ceil() as usize).min(height - 1);
     let cos_prec = rect.prec.cos() as f32;
     let dxf = rect.dx as f32;
     let dyf = rect.dy as f32;
