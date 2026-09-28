@@ -1,10 +1,10 @@
 //! Python bindings for the line segment detector.
 
 use numpy::ndarray::Array3;
-use numpy::{IntoPyArray, PyArray3, PyReadonlyArray2, PyReadonlyArray3};
+use numpy::{IntoPyArray, PyArray3, PyReadonlyArray2, PyReadonlyArray3, PyUntypedArrayMethods};
 use pyo3::prelude::*;
 
-use crate::{detector, warp};
+use crate::{detector, sample, warp};
 
 /// One detected line segment, in input-image coordinates.
 #[pyclass(frozen, module = "lsdetect")]
@@ -61,15 +61,26 @@ impl Segment {
     }
 }
 
-/// Find the validated line segments of a grayscale image.
-#[pyfunction]
-#[pyo3(signature = (gray, scale = detector::SCALE))]
-fn detect(py: Python<'_>, gray: PyReadonlyArray2<'_, f64>, scale: f64) -> Vec<Segment> {
+/// The detector for one concrete gray depth, GIL released while it runs.
+fn detect_typed<'py, T>(py: Python<'py>, gray: PyReadonlyArray2<'py, T>, scale: f64) -> Vec<Segment>
+where
+    T: sample::Gray + numpy::Element,
+{
     let view = gray.as_array();
     let height = view.nrows();
     let width = view.ncols();
-    let data: Vec<f64> = view.iter().copied().collect();
-    let found = py.detach(move || detector::detect(&data, width, height, scale));
+    let found = if let Some(direct) = view.as_slice() {
+        py.detach(|| {
+            detector::detect(direct, width, height, scale)
+                .expect("the buffer length comes from the array's own shape")
+        })
+    } else {
+        let data: Vec<T> = view.iter().copied().collect();
+        py.detach(move || {
+            detector::detect(&data, width, height, scale)
+                .expect("the buffer length comes from the array's own shape")
+        })
+    };
     found
         .into_iter()
         .map(|s| Segment {
@@ -84,24 +95,82 @@ fn detect(py: Python<'_>, gray: PyReadonlyArray2<'_, f64>, scale: f64) -> Vec<Se
         .collect()
 }
 
-/// Perspective-warp an RGB image through an inverse homography.
+/// Find the validated line segments of a grayscale image.
 #[pyfunction]
-fn warp_rgb<'py>(
+#[pyo3(signature = (gray, scale = detector::SCALE))]
+fn detect<'py>(py: Python<'py>, gray: &Bound<'py, PyAny>, scale: f64) -> PyResult<Vec<Segment>> {
+    if let Ok(floats) = gray.extract::<PyReadonlyArray2<f64>>() {
+        return Ok(detect_typed(py, floats, scale));
+    }
+    if let Ok(floats) = gray.extract::<PyReadonlyArray2<f32>>() {
+        return Ok(detect_typed(py, floats, scale));
+    }
+    if let Ok(bytes) = gray.extract::<PyReadonlyArray2<u8>>() {
+        return Ok(detect_typed(py, bytes, scale));
+    }
+    if let Ok(words) = gray.extract::<PyReadonlyArray2<u16>>() {
+        return Ok(detect_typed(py, words, scale));
+    }
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "detect expects a (height, width) array of uint8, uint16, \
+         float32 or float64",
+    ))
+}
+
+/// The warp for one concrete sample depth, GIL released while it runs.
+fn warp_typed<'py, T>(
     py: Python<'py>,
-    src: PyReadonlyArray3<'py, u8>,
+    src: PyReadonlyArray3<'py, T>,
     inverse: [f64; 9],
     scale: f64,
     off_x: f64,
     off_y: f64,
-) -> Bound<'py, PyArray3<u8>> {
+) -> Bound<'py, PyArray3<T>>
+where
+    T: sample::Sample + numpy::Element,
+{
     let view = src.as_array();
     let height = view.shape()[0];
     let width = view.shape()[1];
-    let data: Vec<u8> = view.iter().copied().collect();
-    let out =
-        py.detach(move || warp::warp_rgb(&data, width, height, &inverse, scale, off_x, off_y));
+    let out = if let Some(direct) = view.as_slice() {
+        py.detach(|| {
+            warp::warp_rgb(direct, width, height, &inverse, scale, off_x, off_y)
+                .expect("the buffer length comes from the array's own shape")
+        })
+    } else {
+        let data: Vec<T> = view.iter().copied().collect();
+        py.detach(move || {
+            warp::warp_rgb(&data, width, height, &inverse, scale, off_x, off_y)
+                .expect("the buffer length comes from the array's own shape")
+        })
+    };
     let array = Array3::from_shape_vec((height, width, 3), out).unwrap();
     array.into_pyarray(py)
+}
+
+/// Perspective-warp an RGB image through an inverse homography.
+#[pyfunction]
+fn warp_rgb<'py>(
+    py: Python<'py>,
+    src: &Bound<'py, PyAny>,
+    inverse: [f64; 9],
+    scale: f64,
+    off_x: f64,
+    off_y: f64,
+) -> PyResult<Bound<'py, PyAny>> {
+    if let Ok(bytes) = src.extract::<PyReadonlyArray3<u8>>()
+        && bytes.shape()[2] == 3
+    {
+        return Ok(warp_typed(py, bytes, inverse, scale, off_x, off_y).into_any());
+    }
+    if let Ok(words) = src.extract::<PyReadonlyArray3<u16>>()
+        && words.shape()[2] == 3
+    {
+        return Ok(warp_typed(py, words, inverse, scale, off_x, off_y).into_any());
+    }
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "warp_rgb expects a (height, width, 3) array of uint8 or uint16",
+    ))
 }
 
 #[pymodule]

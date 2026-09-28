@@ -4,20 +4,28 @@
 
 use rayon::prelude::*;
 
+use crate::sample::{Sample, SizeMismatch};
+
 /// For output pixel (x, y) the source position is
 /// inverse * (x / scale + off_x, y / scale + off_y, 1), sampled
 /// bilinearly. Pixels whose source falls outside the image stay
 /// black. inverse is the 9 row-major entries of the 3x3 matrix.
-pub fn warp_rgb(
-    src: &[u8],
+pub fn warp_rgb<T: Sample>(
+    src: &[T],
     width: usize,
     height: usize,
     inverse: &[f64; 9],
     scale: f64,
     off_x: f64,
     off_y: f64,
-) -> Vec<u8> {
-    let mut out = vec![0u8; width * height * 3];
+) -> Result<Vec<T>, SizeMismatch> {
+    if src.len() != width * height * 3 {
+        return Err(SizeMismatch {
+            expected: width * height * 3,
+            got: src.len(),
+        });
+    }
+    let mut out = vec![T::from_f64(0.0); width * height * 3];
     let wf = width as f64 - 1.0;
     let hf = height as f64 - 1.0;
     out.par_chunks_mut(width * 3)
@@ -54,13 +62,31 @@ pub fn warp_rgb(
                 let i11 = (y1 * width + x1) * 3;
                 let o = x * 3;
                 for c in 0..3 {
-                    let value = src[i00 + c] as f64 * w00
-                        + src[i10 + c] as f64 * w10
-                        + src[i01 + c] as f64 * w01
-                        + src[i11 + c] as f64 * w11;
-                    row[o + c] = (value + 0.5) as u8;
+                    let value = src[i00 + c].to_f64() * w00
+                        + src[i10 + c].to_f64() * w10
+                        + src[i01 + c].to_f64() * w01
+                        + src[i11 + c].to_f64() * w11;
+                    row[o + c] = T::from_f64(value);
                 }
             }
         });
-    out
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_wrong_buffer_length_is_refused() {
+        let src = vec![0u8; 11];
+        let result = warp_rgb(&src, 2, 2, &[0.0; 9], 1.0, 0.0, 0.0);
+        assert_eq!(
+            result.unwrap_err(),
+            SizeMismatch {
+                expected: 12,
+                got: 11
+            }
+        );
+    }
 }

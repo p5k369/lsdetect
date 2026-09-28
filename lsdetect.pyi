@@ -1,3 +1,5 @@
+from typing import overload
+
 import numpy as np
 import numpy.typing as npt
 
@@ -17,8 +19,13 @@ class Segment:
     def length(self) -> float: ...
 
 def detect(
-    gray: npt.NDArray[np.float64], scale: float = 0.8
+    gray: npt.NDArray[np.uint8]
+    | npt.NDArray[np.uint16]
+    | npt.NDArray[np.float32]
+    | npt.NDArray[np.float64],
+    scale: float = 0.8,
 ) -> list[Segment]: ...
+@overload
 def warp_rgb(
     src: npt.NDArray[np.uint8],
     inverse: tuple[
@@ -28,3 +35,13 @@ def warp_rgb(
     off_x: float,
     off_y: float,
 ) -> npt.NDArray[np.uint8]: ...
+@overload
+def warp_rgb(
+    src: npt.NDArray[np.uint16],
+    inverse: tuple[
+        float, float, float, float, float, float, float, float, float
+    ],
+    scale: float,
+    off_x: float,
+    off_y: float,
+) -> npt.NDArray[np.uint16]: ...
