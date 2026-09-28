@@ -7,6 +7,8 @@
 use rayon::prelude::*;
 use std::f64::consts::PI;
 
+use crate::sample::{Gray, SizeMismatch};
+
 /// Default working scale, shrinks the image first.
 pub const SCALE: f64 = 0.8;
 /// Anti-alias blur sigma, per unit of scale.
@@ -87,20 +89,38 @@ struct Rect {
 }
 
 /// Find the validated line segments of a grayscale image.
-pub fn detect(image: &[f64], width: usize, height: usize, scale: f64) -> Vec<Segment> {
-    assert_eq!(image.len(), width * height);
-    if width < 3 || height < 3 {
-        return Vec::new();
+pub fn detect<T: Gray>(
+    image: &[T],
+    width: usize,
+    height: usize,
+    scale: f64,
+) -> Result<Vec<Segment>, SizeMismatch> {
+    if image.len() != width * height {
+        return Err(SizeMismatch {
+            expected: width * height,
+            got: image.len(),
+        });
     }
+    if width < 3 || height < 3 {
+        return Ok(Vec::new());
+    }
+    let converted;
+    let gray: &[f64] = match T::as_f64_slice(image) {
+        Some(direct) => direct,
+        None => {
+            converted = image.iter().map(|s| s.to_gray()).collect::<Vec<f64>>();
+            &converted
+        }
+    };
     let owned;
     let (img, w, h) = if scale < 1.0 {
-        owned = downscale(image, width, height, scale);
+        owned = downscale(gray, width, height, scale);
         (owned.0.as_slice(), owned.1, owned.2)
     } else {
-        (image, width, height)
+        (gray, width, height)
     };
     if w < 3 || h < 3 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let prec = PI * ANGLE_TOLERANCE_DEG / 180.0;
     let p = ANGLE_TOLERANCE_DEG / 180.0;
@@ -155,7 +175,7 @@ pub fn detect(image: &[f64], width: usize, height: usize, scale: f64) -> Vec<Seg
         });
     }
     segments.sort_by(|a, b| b.length().total_cmp(&a.length()));
-    segments
+    Ok(segments)
 }
 
 /// Blur, then subsample.
@@ -762,7 +782,7 @@ mod tests {
     #[test]
     fn vertical_edge_is_found() {
         let img = edge_image(120, 120, 60);
-        let segs = detect(&img, 120, 120, SCALE);
+        let segs = detect(&img, 120, 120, SCALE).unwrap();
         assert!(!segs.is_empty());
         let best = &segs[0];
         assert!(best.angle().abs() > 88.0, "angle {}", best.angle());
@@ -774,14 +794,14 @@ mod tests {
     fn tiny_image_is_empty() {
         for n in 1..3 {
             let img = vec![128.0; n * n];
-            assert!(detect(&img, n, n, SCALE).is_empty(), "{n}x{n}");
+            assert!(detect(&img, n, n, SCALE).unwrap().is_empty(), "{n}x{n}");
         }
     }
 
     #[test]
     fn flat_image_is_empty() {
         let img = vec![128.0; 100 * 100];
-        assert!(detect(&img, 100, 100, SCALE).is_empty());
+        assert!(detect(&img, 100, 100, SCALE).unwrap().is_empty());
     }
 }
 
@@ -865,5 +885,30 @@ mod bench {
             t_nfa * 1e3,
             kept
         );
+    }
+}
+
+#[cfg(test)]
+mod size_tests {
+    use super::*;
+
+    #[test]
+    fn a_wrong_buffer_length_is_refused() {
+        let image = vec![0.0f64; 8];
+        let result = detect(&image, 3, 3, 1.0);
+        assert_eq!(
+            result.unwrap_err(),
+            SizeMismatch {
+                expected: 9,
+                got: 8
+            }
+        );
+    }
+
+    #[test]
+    fn quantized_grays_share_the_detector_scale() {
+        use crate::sample::Gray;
+        assert_eq!(255u8.to_gray(), 255.0);
+        assert_eq!(65535u16.to_gray(), 255.0);
     }
 }
