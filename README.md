@@ -7,6 +7,10 @@ Gioi, Jakubowicz, Morel, Randall. Image Processing On Line, 2012).
 
 ## Python
 
+```
+pip install lsdetect
+```
+
 ```python
 import lsdetect
 
@@ -16,19 +20,15 @@ for s in segments:
     print(s.x1, s.y1, s.x2, s.y2, s.width, s.precision, s.angle, s.length)
 ```
 
-Build with [maturin](https://www.maturin.rs): `maturin develop
---release`. Python 3.11 or newer.
-
 ## Rust
 
-Not on crates.io yet, so add it as a git dependency:
-
 ```toml
-lsdetect = { git = "https://github.com/p5k369/lsdetect" }
+[dependencies]
+lsdetect = "0.2"
 ```
 
 ```rust
-let segments = lsdetect::detect(&gray, width, height, lsdetect::SCALE);
+let segments = lsdetect::detect(&gray, width, height, lsdetect::SCALE)?;
 ```
 
 ## License

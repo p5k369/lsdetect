@@ -2,11 +2,23 @@
 name = "lsdetect"
 version = "0.2.0"
 edition = "2024"
+rust-version = "1.88"
 license = "MIT OR Apache-2.0"
 authors = ["Patrick Zwerschke"]
 repository = "https://github.com/p5k369/lsdetect"
-description = "Line segment detector (LSD) in pure Rust, with Python bindings"
+documentation = "https://docs.rs/lsdetect"
+description = "Line segment detector (LSD) in pure Rust, with a fast perspective warp and Python bindings"
 readme = "README.md"
+keywords = ["lsd", "line-detection", "computer-vision", "image", "warp"]
+categories = ["computer-vision", "multimedia::images", "algorithms"]
+exclude = [
+    "/.github",
+    "/tests",
+    "/pyproject.toml",
+    "/lsdetect.pyi",
+    "/.editorconfig",
+    "/.pre-commit-config.yaml",
+]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
