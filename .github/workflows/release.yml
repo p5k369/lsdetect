@@ -194,7 +194,7 @@ jobs:
           path: dist
 
   release:
-    name: Release
+    name: Publish to PyPI
     runs-on: ubuntu-latest
     if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
     needs: [linux, musllinux, windows, macos, sdist]
@@ -235,7 +235,8 @@ jobs:
         run: |
           version=$(cargo metadata --no-deps --format-version 1 \
             | jq -r '.packages[0].version')
-          if curl -fsS "https://crates.io/api/v1/crates/lsdetect/$version" \
+          if curl -fsS -A "lsdetect-release (github.com/p5k369/lsdetect)" \
+            "https://crates.io/api/v1/crates/lsdetect/$version" \
             >/dev/null 2>&1; then
             echo "lsdetect $version is already published, skipping"
             echo "published=true" >> "$GITHUB_OUTPUT"
