@@ -27,7 +27,7 @@ const LOG_EPSILON: f64 = 0.0;
 const NORM_BINS: usize = 1024;
 
 /// One detected line segment, in input-image coordinates.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Segment {
     /// First endpoint x, in input-image pixels.
     pub x1: f64,
@@ -89,6 +89,11 @@ struct Rect {
 }
 
 /// Find the validated line segments of a grayscale image.
+///
+/// # Errors
+///
+/// [`SizeMismatch`] when the buffer does not hold width * height
+/// samples.
 pub fn detect<T: Gray>(
     image: &[T],
     width: usize,
