@@ -159,3 +159,39 @@ def test_warp_refuses_an_alpha_channel() -> None:
     src = np.zeros((4, 4, 4), dtype=np.uint8)
     with pytest.raises(TypeError, match="uint8 or uint16"):
         lsd.warp_rgb(src, identity(), 1.0, 0.0, 0.0)
+
+
+def test_lanczos_is_exact_on_the_identity() -> None:
+    """The sharp filter also maps every pixel onto itself."""
+    rng = np.random.default_rng(7)
+    src = rng.integers(0, 65536, (24, 32, 3), dtype=np.uint16)
+    out = lsd.warp_rgb(src, identity(), 1.0, 0.0, 0.0, filter="lanczos3")
+    assert np.array_equal(out, src)
+
+
+def test_lanczos_keeps_more_detail_than_bilinear() -> None:
+    """On a half-pixel shift the sharp filter retains more energy."""
+    rng = np.random.default_rng(9)
+    src = rng.integers(0, 65536, (64, 64, 3), dtype=np.uint16)
+    shifted = (1.0, 0.0, 0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 1.0)
+    soft = lsd.warp_rgb(src, shifted, 1.0, 0.0, 0.0)
+    sharp = lsd.warp_rgb(src, shifted, 1.0, 0.0, 0.0, filter="lanczos3")
+    inner = np.s_[8:-8, 8:-8, :]
+    spread_soft = soft[inner].astype(np.int64).std()
+    spread_sharp = sharp[inner].astype(np.int64).std()
+    assert spread_sharp > spread_soft * 1.2
+
+
+def test_an_unknown_filter_is_refused() -> None:
+    """A typo in the filter name raises instead of guessing."""
+    src = np.zeros((4, 4, 3), dtype=np.uint8)
+    with pytest.raises(ValueError, match="bilinear"):
+        lsd.warp_rgb(src, identity(), 1.0, 0.0, 0.0, filter="cubic")
+
+
+def test_the_output_frame_can_differ_from_the_source() -> None:
+    """out_size picks a window; offsets place it in the source."""
+    src = np.arange(4 * 4 * 3, dtype=np.uint16).reshape(4, 4, 3)
+    out = lsd.warp_rgb(src, identity(), 1.0, 1.0, 1.0, out_size=(2, 2))
+    assert out.shape == (2, 2, 3)
+    assert np.array_equal(out, src[1:3, 1:3])

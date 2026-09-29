@@ -5,6 +5,7 @@ use numpy::{IntoPyArray, PyArray3, PyReadonlyArray2, PyReadonlyArray3, PyUntyped
 use pyo3::prelude::*;
 
 use crate::{detector, sample, warp};
+use warp::Filter;
 
 /// One detected line segment, in input-image coordinates.
 #[pyclass(frozen, module = "lsdetect")]
@@ -118,6 +119,7 @@ fn detect<'py>(py: Python<'py>, gray: &Bound<'py, PyAny>, scale: f64) -> PyResul
 }
 
 /// The warp for one concrete sample depth, GIL released while it runs.
+#[allow(clippy::too_many_arguments)]
 fn warp_typed<'py, T>(
     py: Python<'py>,
     src: PyReadonlyArray3<'py, T>,
@@ -125,6 +127,8 @@ fn warp_typed<'py, T>(
     scale: f64,
     off_x: f64,
     off_y: f64,
+    filter: Filter,
+    out_size: Option<(usize, usize)>,
 ) -> Bound<'py, PyArray3<T>>
 where
     T: sample::Sample + numpy::Element,
@@ -132,24 +136,31 @@ where
     let view = src.as_array();
     let height = view.shape()[0];
     let width = view.shape()[1];
+    let (out_width, out_height) = out_size.unwrap_or((width, height));
     let out = if let Some(direct) = view.as_slice() {
         py.detach(|| {
-            warp::warp_rgb(direct, width, height, &inverse, scale, off_x, off_y)
-                .expect("the buffer length comes from the array's own shape")
+            warp::warp_rgb(
+                direct, width, height, out_width, out_height, &inverse, scale, off_x, off_y, filter,
+            )
+            .expect("the buffer length comes from the array's own shape")
         })
     } else {
         let data: Vec<T> = view.iter().copied().collect();
         py.detach(move || {
-            warp::warp_rgb(&data, width, height, &inverse, scale, off_x, off_y)
-                .expect("the buffer length comes from the array's own shape")
+            warp::warp_rgb(
+                &data, width, height, out_width, out_height, &inverse, scale, off_x, off_y, filter,
+            )
+            .expect("the buffer length comes from the array's own shape")
         })
     };
-    let array = Array3::from_shape_vec((height, width, 3), out).unwrap();
+    let array = Array3::from_shape_vec((out_height, out_width, 3), out).unwrap();
     array.into_pyarray(py)
 }
 
 /// Perspective-warp an RGB image through an inverse homography.
 #[pyfunction]
+#[pyo3(signature = (src, inverse, scale, off_x, off_y, filter = "bilinear", out_size = None))]
+#[allow(clippy::too_many_arguments)]
 fn warp_rgb<'py>(
     py: Python<'py>,
     src: &Bound<'py, PyAny>,
@@ -157,16 +168,31 @@ fn warp_rgb<'py>(
     scale: f64,
     off_x: f64,
     off_y: f64,
+    filter: &str,
+    out_size: Option<(usize, usize)>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let kernel = match filter {
+        "bilinear" => Filter::Bilinear,
+        "lanczos3" => Filter::Lanczos3,
+        other => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown filter {other:?}, expected \"bilinear\" or \"lanczos3\""
+            )));
+        }
+    };
     if let Ok(bytes) = src.extract::<PyReadonlyArray3<u8>>()
         && bytes.shape()[2] == 3
     {
-        return Ok(warp_typed(py, bytes, inverse, scale, off_x, off_y).into_any());
+        return Ok(
+            warp_typed(py, bytes, inverse, scale, off_x, off_y, kernel, out_size).into_any(),
+        );
     }
     if let Ok(words) = src.extract::<PyReadonlyArray3<u16>>()
         && words.shape()[2] == 3
     {
-        return Ok(warp_typed(py, words, inverse, scale, off_x, off_y).into_any());
+        return Ok(
+            warp_typed(py, words, inverse, scale, off_x, off_y, kernel, out_size).into_any(),
+        );
     }
     Err(pyo3::exceptions::PyTypeError::new_err(
         "warp_rgb expects a (height, width, 3) array of uint8 or uint16",
