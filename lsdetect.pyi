@@ -49,3 +49,31 @@ def warp_rgb(
     filter: Literal["bilinear", "lanczos3"] = "bilinear",
     out_size: tuple[int, int] | None = None,
 ) -> npt.NDArray[np.uint16]: ...
+@overload
+def remap_rgb(
+    src: npt.NDArray[np.uint8],
+    map_x: npt.NDArray[np.float32],
+    map_y: npt.NDArray[np.float32],
+    filter: Literal["bilinear", "lanczos3"] = "bilinear",
+) -> npt.NDArray[np.uint8]: ...
+@overload
+def remap_rgb(
+    src: npt.NDArray[np.uint16],
+    map_x: npt.NDArray[np.float32],
+    map_y: npt.NDArray[np.float32],
+    filter: Literal["bilinear", "lanczos3"] = "bilinear",
+) -> npt.NDArray[np.uint16]: ...
+@overload
+def remap_gray(
+    src: npt.NDArray[np.uint8],
+    map_x: npt.NDArray[np.float32],
+    map_y: npt.NDArray[np.float32],
+    filter: Literal["bilinear", "lanczos3"] = "bilinear",
+) -> npt.NDArray[np.uint8]: ...
+@overload
+def remap_gray(
+    src: npt.NDArray[np.uint16],
+    map_x: npt.NDArray[np.float32],
+    map_y: npt.NDArray[np.float32],
+    filter: Literal["bilinear", "lanczos3"] = "bilinear",
+) -> npt.NDArray[np.uint16]: ...

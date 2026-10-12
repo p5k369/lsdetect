@@ -2,8 +2,8 @@
 //!
 //! Implements "LSD: a Line Segment Detector" (Grompone von Gioi et al., IPOL
 //! 2012) as an independent, permissively licensed implementation,
-//! plus a parallel bilinear perspective warp for applying the
-//! geometry the segments reveal.
+//! plus a parallel perspective warp for applying the geometry the
+//! segments reveal and a coordinate-map remap for any other geometry.
 //!
 //! ```
 //! # fn main() -> Result<(), lsdetect::SizeMismatch> {
@@ -26,7 +26,7 @@ mod warp;
 
 pub use detector::{SCALE, Segment, detect};
 pub use sample::{Gray, Sample, SizeMismatch};
-pub use warp::{Filter, warp_rgb};
+pub use warp::{Filter, remap_gray, remap_rgb, warp_rgb};
 
 #[cfg(feature = "extension-module")]
 mod python;
