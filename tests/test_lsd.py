@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import lsdetect as lsd
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 
@@ -195,3 +196,69 @@ def test_the_output_frame_can_differ_from_the_source() -> None:
     out = lsd.warp_rgb(src, identity(), 1.0, 1.0, 1.0, out_size=(2, 2))
     assert out.shape == (2, 2, 3)
     assert np.array_equal(out, src[1:3, 1:3])
+
+
+def _identity_maps(
+    height: int, width: int
+) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32]]:
+    ys, xs = np.mgrid[0:height, 0:width]
+    return xs.astype(np.float32), ys.astype(np.float32)
+
+
+def test_an_identity_remap_returns_the_image() -> None:
+    """An identity map reproduces the image exactly with both filters."""
+    src = (np.arange(6 * 5 * 3) * 7 % 256).astype(np.uint8).reshape(5, 6, 3)
+    xs, ys = _identity_maps(5, 6)
+    for kernel in ("bilinear", "lanczos3"):
+        out = lsd.remap_rgb(src, xs, ys, kernel)
+        assert out.dtype == np.uint8
+        assert np.array_equal(out, src)
+
+
+def test_a_remap_agrees_with_the_warp_on_a_translation() -> None:
+    """A translation map resamples exactly like the homography warp."""
+    rng = np.random.default_rng(3)
+    src = rng.integers(0, 65535, (24, 32, 3), dtype=np.uint16)
+    xs, ys = _identity_maps(24, 32)
+    shift = (1.0, 0.0, 2.5, 0.0, 1.0, -1.25, 0.0, 0.0, 1.0)
+    warped = lsd.warp_rgb(src, shift, 1.0, 0.0, 0.0, "lanczos3")
+    remapped = lsd.remap_rgb(src, xs + 2.5, ys - 1.25, "lanczos3")
+    assert np.array_equal(warped, remapped)
+
+
+def test_a_remap_may_change_the_output_size() -> None:
+    """The output takes the maps' shape, not the source's."""
+    src = np.full((4, 4, 3), 90, dtype=np.uint8)
+    xs, ys = _identity_maps(2, 3)
+    assert lsd.remap_rgb(src, xs, ys).shape == (2, 3, 3)
+
+
+def test_mismatched_maps_are_refused_clearly() -> None:
+    """Maps of different shapes raise a ValueError naming the problem."""
+    src = np.zeros((4, 4, 3), dtype=np.uint8)
+    xs, _ = _identity_maps(4, 4)
+    _, ys = _identity_maps(3, 4)
+    with pytest.raises(ValueError, match="same shape"):
+        lsd.remap_rgb(src, xs, ys)
+
+
+def test_a_gray_remap_matches_the_rgb_remap_channel_for_channel() -> None:
+    """A mask follows the same geometry as a picture, exactly."""
+    rng = np.random.default_rng(5)
+    mask = rng.integers(0, 255, (20, 30), dtype=np.uint8)
+    xs, ys = _identity_maps(20, 30)
+    gray = lsd.remap_gray(mask, xs + 1.3, ys - 0.7, "lanczos3")
+    rgb = lsd.remap_rgb(
+        np.repeat(mask[..., None], 3, axis=2), xs + 1.3, ys - 0.7, "lanczos3"
+    )
+    assert gray.shape == (20, 30)
+    assert np.array_equal(gray, rgb[..., 0])
+
+
+def test_a_gray_identity_remap_keeps_16bit_values() -> None:
+    """The gray path keeps the sample depth of its input."""
+    mask = (np.arange(12, dtype=np.uint16) * 5000).reshape(3, 4)
+    xs, ys = _identity_maps(3, 4)
+    out = lsd.remap_gray(mask, xs, ys)
+    assert out.dtype == np.uint16
+    assert np.array_equal(out, mask)
